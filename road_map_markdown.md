@@ -106,7 +106,7 @@ IMPORT FOREIGN SCHEMA osm FROM SERVER bd_win INTO osm_f;
 ```
 
 ## 3. Data Preparation
-### 3.1 Creating Materialized Views in the AOI
+### 3.1 Loading data through Materialized Views in the AOI
 [PostGIS Tips](https://postgis.net/documentation/tips/tip_intersection_faster/)
 ```sql
 CREATE MATERIALIZED VIEW funai_f.mv_xingu_reserve AS
@@ -135,8 +135,8 @@ CREATE INDEX idx_mv_xingu_reserve_geom ON funai_f.mv_xingu_reserve USING GIST (t
 CREATE INDEX idx_mv_xingu_fire_7days_geom ON fire_alerts.mv_xingu_fire_7days USING GIST (geom);
 ```
 
-### 3.3 Creating Triggers
-#### 3.3.1 Update Timestamp
+## 4.0 Creating Triggers, functions and materialized views
+### 4.1 Trigger for Update Timestamp
 ```sql
 CREATE OR REPLACE FUNCTION update_timestamp()
 RETURNS TRIGGER AS $$
@@ -152,7 +152,7 @@ FOR EACH ROW
 EXECUTE FUNCTION update_timestamp();
 ```
 
-### 3.4 Creating Function (Calculate Distance to POIs: Roads, Tracks, Rivers, Villages, etc)
+### 4.2 Creating Function (Calculate Distance to POIs: Roads, Tracks, Rivers, Villages, etc)
 ```sql
 CREATE OR REPLACE FUNCTION osm_f.find_closest_pois(input_geom geometry)
 RETURNS TABLE(result json)
@@ -209,4 +209,33 @@ order by datahora desc
 limit 1
 
 {"type_dist" : "Villages", "coordinates" : [[-56.32649,-16.97905],[-53.9766291,-12.9924565]], "distance_km" : 508.35871359310005}
+```
+
+### 4.3 Creating materialized view for main results
+```sql
+CREATE MATERIALIZED VIEW fire_alerts.mv_ind_lands_alerts_7days
+TABLESPACE pg_default
+AS SELECT row_number() OVER () AS row_number,
+    w.terrai_nome,
+    w.terrai_codigo,
+    w.ind_land_ha,
+    count(w.fid) AS alerts_amount,
+    array_agg(w.acq_date) AS acq_dates,
+    round((st_area(st_union(st_transform(w.geom, 29101)))::integer / 10000)::numeric, 0) AS sob_fire_px_ha,
+    round((st_area(st_union(st_transform(w.geom, 29101)))::integer / 10000)::numeric / w.ind_land_ha * 100::numeric, 4) AS perc_fire_px,
+    st_collect(w.geom) AS geom_fire
+   FROM ( SELECT b.fid,
+            b.acq_date,
+            round(st_area(st_transform(a.the_geom, 29101))::numeric / 10000::numeric, 0) AS ind_land_ha,
+            a.terrai_nome,
+            a.terrai_codigo,
+                CASE
+                    WHEN st_coveredby(st_transform(st_envelope(st_buffer(st_transform(b.points, 29101), 500::double precision)), 4326), st_transform(a.the_geom, 4326)) THEN st_transform(st_envelope(st_buffer(st_transform(b.points, 29101), 500::double precision)), 4326)
+                    ELSE st_intersection(st_transform(st_envelope(st_buffer(st_transform(b.points, 29101), 500::double precision)), 4326), st_transform(a.the_geom, 4326))
+                END AS geom
+           FROM funai_f.mv_xingu_reserve a
+             LEFT JOIN fire_alerts.mv_xingu_fire_7days b ON st_intersects(st_transform(a.the_geom, 4326), st_transform(st_envelope(st_buffer(st_transform(b.points, 29101), 500::double precision)), 4326))
+          GROUP BY b.fid, b.acq_date, a.terrai_nome, a.the_geom, a.terrai_codigo, b.points) w
+  GROUP BY w.terrai_nome, w.terrai_codigo, w.ind_land_ha
+WITH DATA;
 ```
