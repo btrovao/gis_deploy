@@ -72,7 +72,7 @@ CREATE SCHEMA fire_alerts;
 ```
 #### 2.2.2 Importing Data from NASA Firms
 ```sql
-IMPORT FOREIGN SCHEMA public FROM SERVER geoserver_funai INTO fire_alerts;
+IMPORT FOREIGN SCHEMA ogr_all FROM SERVER nasa_firms INTO fire_alerts;
 ```
 #### 2.2.3 Importing Data from BDQueimadas (Brazil)
 - Import to QGIS with "Add delimited text layer", explore and adjust the geometry configuration
@@ -85,7 +85,7 @@ CREATE SCHEMA indigenous_lands;
 ```
 #### 2.3.2 Importing Data
 ```sql
-IMPORT FOREIGN SCHEMA public FROM SERVER geoserver_funai INTO indigenous_lands;
+IMPORT FOREIGN SCHEMA ogr_all FROM SERVER geoserver_funai INTO indigenous_lands;
 ```
 #### 2.3.3 Creating Materialized View in the AOI (for large processing tasks)
 ```sql
