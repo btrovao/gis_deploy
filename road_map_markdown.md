@@ -254,6 +254,8 @@ order by acq_datetime desc
 
 ### 4.3 Creating materialized view for main results
 ```sql
+
+--Materialized view with fire pixel area geometries
 CREATE MATERIALIZED VIEW fire_alerts.mv_ind_lands_alerts_7days
 TABLESPACE pg_default
 AS SELECT row_number() OVER () AS row_number,
@@ -279,4 +281,34 @@ AS SELECT row_number() OVER () AS row_number,
           GROUP BY b.fid, b.acq_date, a.terrai_nome, a.the_geom, a.terrai_codigo, b.points) w
   GROUP BY w.terrai_nome, w.terrai_codigo, w.ind_land_ha
 WITH DATA;
+
+--Materialized view with the Indigenous Reserve geometry
+CREATE MATERIALIZED VIEW fire_alerts.mv_ind_lands_alerts_2months_geom
+TABLESPACE pg_default
+AS SELECT row_number() OVER () AS row_number,
+    w.terrai_nome,
+    w.terrai_codigo,
+    w.ind_land_ha,
+    count(w.id) AS alerts_amount,
+    array_agg(w.acq_date) AS acq_dates,
+    round((st_area(st_union(st_transform(w.geom, 29101)))::integer / 10000)::numeric, 0) AS sob_fire_px_ha,
+    round((st_area(st_union(st_transform(w.geom, 29101)))::integer / 10000)::numeric / w.ind_land_ha * 100::numeric, 4) AS perc_fire_px,
+    w.the_geom
+   FROM ( SELECT b.id,
+            b.acq_date,
+            round(st_area(st_transform(a.the_geom, 29101))::numeric / 10000::numeric, 0) AS ind_land_ha,
+            a.terrai_nome,
+            a.terrai_codigo,
+                CASE
+                    WHEN st_coveredby(st_transform(st_envelope(st_buffer(st_transform(b.geom, 29101), 500::double precision)), 4326), st_transform(a.the_geom, 4326)) THEN st_transform(st_envelope(st_buffer(st_transform(b.geom, 29101), 500::double precision)), 4326)
+                    ELSE st_intersection(st_transform(st_envelope(st_buffer(st_transform(b.geom, 29101), 500::double precision)), 4326), st_transform(a.the_geom, 4326))
+                END AS geom,
+                a.the_geom
+           FROM funai_f.mv_xingu_reserve a
+             LEFT JOIN fire_alerts.fire_nrt_m_61_3m b ON st_intersects(st_transform(a.the_geom, 4326), st_transform(st_envelope(st_buffer(st_transform(b.geom, 29101), 500::double precision)), 4326))
+          GROUP BY b.id, b.acq_date, a.terrai_nome, a.the_geom, a.terrai_codigo, b.geom) w
+  GROUP BY w.terrai_nome, w.terrai_codigo, w.ind_land_ha, w.the_geom
+WITH DATA;
+
+
 ```
