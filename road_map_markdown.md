@@ -63,7 +63,7 @@ osmconvert brazil-latest.pbf -b="-54.01,-13.00,-52.53,-10.60" -o=xingu --drop-au
 ```
 #### 2.1.3 Opening with QGIS
 - Drag and drop the output "xingu" into QGIS
-- Import to Postgres with QGIS database manager tool (create spatial index)
+- Import to the schema 'osm' in postgres with QGIS database manager tool (create spatial index)
 
 ### 2.2 Fire Alerts
 #### 2.2.1 Creating Schema
@@ -138,7 +138,9 @@ CREATE INDEX idx_mv_xingu_fire_7days_geom ON fire_alerts.mv_xingu_fire_7days USI
 ## 4.0 Creating Triggers, functions and materialized views
 ### 4.1 Trigger for Update Timestamp
 ```sql
-CREATE OR REPLACE FUNCTION update_timestamp()
+
+--Adding a timestamp
+CREATE OR REPLACE FUNCTION osm.update_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = NOW();
@@ -147,13 +149,38 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER update_timestamp_trigger
-BEFORE UPDATE ON osm_data
+BEFORE UPDATE ON osm.xingumultipolygons
 FOR EACH ROW
-EXECUTE FUNCTION update_timestamp();
+EXECUTE FUNCTION osm.update_timestamp();
+
+-- Correcting geometries 
+CREATE OR REPLACE FUNCTION osm.invalid()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+	if not st_isValid(NEW.geom) THEN
+	NEW.geom = (ST_multi(ST_buffer((ST_makevalid(NEW.geom)),0))); 
+	RETURN NEW;
+ else    
+      RETURN NEW;
+    END IF;
+
+END;
+$function$
+;
+
+CREATE TRIGGER invalid
+BEFORE UPDATE ON osm.xingumultipolygons
+FOR EACH ROW
+EXECUTE FUNCTION osm.invalid();
 ```
 
 ### 4.2 Creating Function (Calculate Distance to POIs: Roads, Tracks, Rivers, Villages, etc)
 ```sql
+
+--Finding the closest POIs from the fire alerts points
+
 CREATE OR REPLACE FUNCTION osm_f.find_closest_pois(input_geom geometry)
 RETURNS TABLE(result json)
 LANGUAGE plpgsql
@@ -169,7 +196,7 @@ BEGIN
             'coordinates', ST_AsGeoJSON(st_shortestline(input_geom, mv.geom))::json->'coordinates',                        
             'distance_km', ST_Distance(input_geom::geography, mv.geom::geography) / 1000
         ) AS result     
-    FROM osm_f.xingupoints mv
+    FROM osm.xingupoints mv
     WHERE mv.place IN ('hamlet','isolated_dwelling','village')
     ORDER BY ST_Distance(input_geom::geography, mv.geom::geography) ASC
     LIMIT 3;
@@ -181,7 +208,7 @@ BEGIN
             'coordinates', ST_AsGeoJSON(st_shortestline(input_geom, mv.geom))::json->'coordinates',                        
             'distance_km', ST_Distance(input_geom::geography, mv.geom::geography) / 1000
         ) AS result     
-    FROM osm_f.xingulines mv
+    FROM osm.xingulines mv
     WHERE mv.highway IN ('residential','secondary','service','tertiary','unclassified')
     ORDER BY ST_Distance(input_geom::geography, mv.geom::geography) ASC
     LIMIT 3;
@@ -193,7 +220,7 @@ BEGIN
             'coordinates', ST_AsGeoJSON(st_shortestline(input_geom, mv.geom))::json->'coordinates',                        
             'distance_km', ST_Distance(input_geom::geography, mv.geom::geography) / 1000
         ) AS result     
-    FROM osm_f.xingulines mv
+    FROM osm.xingulines mv
     WHERE mv.highway IN ('footway','path','track')
     ORDER BY ST_Distance(input_geom::geography, mv.geom::geography) ASC
     LIMIT 3;                
