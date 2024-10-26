@@ -181,69 +181,75 @@ EXECUTE FUNCTION osm.invalid();
 
 --Finding the closest POIs from the fire alerts points
 
+
 CREATE OR REPLACE FUNCTION osm_f.find_closest_pois(input_geom geometry)
-RETURNS TABLE(result json)
-LANGUAGE plpgsql
+ RETURNS TABLE(result json)
+ LANGUAGE plpgsql
 AS $function$
-BEGIN
-    -- Ensure the input geometry is valid and transform to EPSG:4326
-    input_geom := ST_Transform(ST_MakeValid(input_geom), 4326);
-    -- Find the closest POI in OSM data from each geom and return as JSON objects
-    RETURN QUERY    
-    SELECT              
-        json_build_object(
-            'type_dist', 'Villages',
-            'coordinates', ST_AsGeoJSON(st_shortestline(input_geom, mv.geom))::json->'coordinates',                        
-            'distance_km', ST_Distance(input_geom::geography, mv.geom::geography) / 1000
-        ) AS result     
-    FROM osm.xingupoints mv
-    WHERE mv.place IN ('hamlet','isolated_dwelling','village')
-    ORDER BY ST_Distance(input_geom::geography, mv.geom::geography) ASC
-    LIMIT 3;
+            BEGIN
+                -- Ensure the input geometry is valid and transform to EPSG:4326
+                input_geom := ST_Transform(ST_MakeValid(input_geom), 4326);
 
-    RETURN QUERY    
-    SELECT              
-        json_build_object(
-            'type_dist', 'Roads',
-            'coordinates', ST_AsGeoJSON(st_shortestline(input_geom, mv.geom))::json->'coordinates',                        
-            'distance_km', ST_Distance(input_geom::geography, mv.geom::geography) / 1000
-        ) AS result     
-    FROM osm.xingulines mv
-    WHERE mv.highway IN ('residential','secondary','service','tertiary','unclassified')
-    ORDER BY ST_Distance(input_geom::geography, mv.geom::geography) ASC
-    LIMIT 3;
+                -- Find the closest POI in OSM data from each geom and return as JSON objects
+                RETURN QUERY    
+                    SELECT              
+                    json_build_object(
+                    'type_dist', 'Villages',
+                    'osm_point_id', mv.osm_id, 
+                        'coordinates', ST_AsGeoJSON(st_shortestline(input_geom, mv.geom))::json->'coordinates',                        
+                        'distance_km', ST_length(st_transform(st_shortestline(input_geom, mv.geom),29101))/1000
+                    ) AS result     
+                    FROM osm.xingupoints mv
+                    where mv.place in ('hamlet','isolated_dwelling','village')
+                    ORDER BY ST_Distance(input_geom::geography, mv.geom::geography) ASC
+                    LIMIT 3;
 
-    RETURN QUERY    
-    SELECT              
-        json_build_object(
-            'type_dist', 'Other ways',
-            'coordinates', ST_AsGeoJSON(st_shortestline(input_geom, mv.geom))::json->'coordinates',                        
-            'distance_km', ST_Distance(input_geom::geography, mv.geom::geography) / 1000
-        ) AS result     
-    FROM osm.xingulines mv
-    WHERE mv.highway IN ('footway','path','track')
-    ORDER BY ST_Distance(input_geom::geography, mv.geom::geography) ASC
-    LIMIT 3;                
-END;
-$function$;
+                RETURN QUERY    
+                 SELECT              
+                    json_build_object(
+                    'type_dist', 'Roads',
+                    'osm_line_id', mv.osm_id, 
+                        'coordinates', ST_AsGeoJSON(st_shortestline(input_geom, mv.geom))::json->'coordinates',                        
+                        'distance_km', ST_length(st_transform(st_shortestline(input_geom, mv.geom),29101))/1000
+                    ) AS result     
+                    FROM osm.xingulines mv
+                    where mv.highway in ('residential','secondary','service','tertiary','unclassified')
+                    ORDER BY ST_Distance(input_geom::geography, mv.geom::geography) ASC
+                    LIMIT 3;
+
+                RETURN QUERY    
+                 SELECT              
+                    json_build_object(
+                    'type_dist', 'Other ways',
+                    'osm_line_id', mv.osm_id, 
+                        'coordinates', ST_AsGeoJSON(st_shortestline(input_geom, mv.geom))::json->'coordinates',                        
+                        'distance_km', ST_length(st_transform(st_shortestline(input_geom, mv.geom),29101))/1000
+                    ) AS result     
+                    FROM osm.xingulines mv
+                    where mv.highway in ('footway','path','track')
+                    ORDER BY ST_Distance(input_geom::geography, mv.geom::geography) ASC
+                    LIMIT 3;                
+            END;
+            $function$
+;
 ```
 
 #### Expected Output
 ```sql
 select osm_f.find_closest_pois(a.points)
 from fire_alerts.mv_xingu_fire_7days a
-where fid = 1845
+where fid = 13883
 order by acq_datetime desc 
 
-{"type_dist" : "Villages", "coordinates" : [[-53.16825,-12.41827],[-52.89841,-11.148044]], "distance_km" : 0}
-{"type_dist" : "Villages", "coordinates" : [[-53.16825,-12.41827],[-52.9022289,-11.8684727]], "distance_km" : 0}
-{"type_dist" : "Villages", "coordinates" : [[-53.16825,-12.41827],[-52.7357819,-10.803888]], "distance_km" : 0}
-{"type_dist" : "Roads", "coordinates" : [[-53.16825,-12.41827],[-52.9452942,-11.4583474]], "distance_km" : 0}
-{"type_dist" : "Roads", "coordinates" : [[-53.16825,-12.41827],[-52.840857,-12.0458308]], "distance_km" : 0}
-{"type_dist" : "Roads", "coordinates" : [[-53.16825,-12.41827],[-52.7683778,-11.6598491]], "distance_km" : 0}
-{"type_dist" : "Other ways", "coordinates" : [[-53.16825,-12.41827],[-52.5643149,-12.8966368]], "distance_km" : 0}
-{"type_dist" : "Other ways", "coordinates" : [[-53.16825,-12.41827],[-52.9291141,-12.0447591]], "distance_km" : 0}
-{"type_dist" : "Other ways", "coordinates" : [[-53.16825,-12.41827],[-52.5329371,-12.804805]], "distance_km" : 0}
+{"type_dist" : "Villages", "osm_point_id" : "416760626", "coordinates" : [[-52.67451,-12.20951],[-52.89841,-11.148044]], "distance_km" : 119.95463431919286}
+{"type_dist" : "Villages", "osm_point_id" : "416760627", "coordinates" : [[-52.67451,-12.20951],[-52.9022289,-11.8684727]], "distance_km" : 45.15210300116736}
+{"type_dist" : "Villages", "osm_point_id" : "415521543", "coordinates" : [[-52.67451,-12.20951],[-52.7357819,-10.803888]], "distance_km" : 155.6695062530801}
+{"type_dist" : "Roads", "osm_line_id" : "321010533", "coordinates" : [[-52.67451,-12.20951],[-52.9452942,-11.4583474]], "distance_km" : 88.19400118751061}
+{"type_dist" : "Roads", "osm_line_id" : "321063110", "coordinates" : [[-52.67451,-12.20951],[-52.8284222,-12.0498065]], "distance_km" : 24.35030361269013}
+{"type_dist" : "Roads", "osm_line_id" : "249222304", "coordinates" : [[-52.67451,-12.20951],[-52.7683778,-11.6598491]], "distance_km" : 61.672465850626736}
+{"type_dist" : "Other ways", "osm_line_id" : "917558963", "coordinates" : [[-52.67451,-12.20951],[-52.5643149,-12.8966368]], "distance_km" : 76.97292989738534}
+{"type_dist" : "Other ways", "osm_line_id" : "921821531", "coordinates" : [[-52.67451,-12.20951],[-52.9170991,-12.0502065]], "distance_km" : 31.74835543740416}
+{"type_dist" : "Other ways", "osm_line_id" : "916453148", "coordinates" : [[-52.67451,-12.20951],[-52.5329371,-12.804805]], "distance_km" : 67.64745696776612}
 ```
 
 ### 4.3 Creating materialized view for main results
