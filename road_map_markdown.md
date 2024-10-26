@@ -230,12 +230,20 @@ $function$;
 
 #### Expected Output
 ```sql
-select osm_f.find_closest_pois(a.geom)
-from fire_alerts.tb_fire_mt_ms_jul_ago_15sep24 a
-order by datahora desc 
-limit 1
+select osm_f.find_closest_pois(a.points)
+from fire_alerts.mv_xingu_fire_7days a
+where fid = 1845
+order by acq_datetime desc 
 
-{"type_dist" : "Villages", "coordinates" : [[-56.32649,-16.97905],[-53.9766291,-12.9924565]], "distance_km" : 508.35871359310005}
+{"type_dist" : "Villages", "coordinates" : [[-53.16825,-12.41827],[-52.89841,-11.148044]], "distance_km" : 0}
+{"type_dist" : "Villages", "coordinates" : [[-53.16825,-12.41827],[-52.9022289,-11.8684727]], "distance_km" : 0}
+{"type_dist" : "Villages", "coordinates" : [[-53.16825,-12.41827],[-52.7357819,-10.803888]], "distance_km" : 0}
+{"type_dist" : "Roads", "coordinates" : [[-53.16825,-12.41827],[-52.9452942,-11.4583474]], "distance_km" : 0}
+{"type_dist" : "Roads", "coordinates" : [[-53.16825,-12.41827],[-52.840857,-12.0458308]], "distance_km" : 0}
+{"type_dist" : "Roads", "coordinates" : [[-53.16825,-12.41827],[-52.7683778,-11.6598491]], "distance_km" : 0}
+{"type_dist" : "Other ways", "coordinates" : [[-53.16825,-12.41827],[-52.5643149,-12.8966368]], "distance_km" : 0}
+{"type_dist" : "Other ways", "coordinates" : [[-53.16825,-12.41827],[-52.9291141,-12.0447591]], "distance_km" : 0}
+{"type_dist" : "Other ways", "coordinates" : [[-53.16825,-12.41827],[-52.5329371,-12.804805]], "distance_km" : 0}
 ```
 
 ### 4.3 Creating materialized view for main results
